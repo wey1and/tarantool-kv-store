@@ -38,7 +38,7 @@ local THRESHOLD_REQUESTS = 1;
 local requestsCounter = 0;
 local lastTimeApiCall = 0;
 
-local function checkRps(req)
+local function checkRps()
   currentTime = os.time()
   delta = currentTime - lastTimeApiCall
   requestsCounter = requestsCounter + 1
@@ -59,7 +59,7 @@ end
 
 
 local function get_value(req)
-  if checkRps(req) then
+  if checkRps() then
   local key = req:stash('key')
   local row = box.space.kv_store:select{ key }
   if row[1] == nil then
@@ -73,7 +73,7 @@ local function get_value(req)
 end
 
 local function create_value(req)
-  if checkRps(req) then
+  if checkRps() then
 	local body = req:json()
 	local key = body['key']
 	local value = body['value']
@@ -90,7 +90,7 @@ end
 
 --todo fix errors
 local function update_value(req)
-  if checkRps(req) then
+  if checkRps() then
   local key = req:stash('key')
 
   local status, value = pcall(function()
@@ -115,10 +115,13 @@ local function update_value(req)
 end
 
 local function delete_value(req)
-  if checkRps(req) then
+  if checkRps() then
   local key = req:stash('key')
 
-  local row = get_row(key)
+  local row = box.space.kv_store:select{ key }
+  if row[1] == nil then
+     return get_response(req, HTTP_CODE.NOT_FOUND, "Key doesn't exist")
+  end
   local rowKey = row[1][1]
 
   box.space.kv_store:delete({rowKey})
