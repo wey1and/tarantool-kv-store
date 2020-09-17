@@ -33,21 +33,24 @@ local HTTP_CODE = {
   TOO_MANY_REQUESTS = 429
 }
 
-local THRESHOLD_SECONDS = 1;
-local THRESHOLD_REQUESTS = 1;
+local THRESHOLD_SECONDS = 10;
+local THRESHOLD_REQUESTS = 10;
 local requestsCounter = 0;
 local lastTimeApiCall = 0;
 
 local function checkRps()
   currentTime = os.time()
   delta = currentTime - lastTimeApiCall
+  if delta > THRESHOLD_SECONDS then
+    requestsCounter = 0
+  end
+
+  lastTimeApiCall = currentTime
   requestsCounter = requestsCounter + 1
 
   if delta < THRESHOLD_SECONDS and requestsCounter > THRESHOLD_REQUESTS then
-    requestsCounter = 0
     return false
   end
-  lastTimeApiCall = currentTime
   return true
 end
 
@@ -83,12 +86,13 @@ local function create_value(req)
     end
 
 	box.space.kv_store:insert{ key, value }
+	return get_response(req, HTTP_CODE.SUCCESS, "Success!")
 
   end
   return get_response(req, HTTP_CODE.TOO_MANY_REQUESTS, "Too many requests!")
 end
 
---todo fix errors
+
 local function update_value(req)
   if checkRps() then
   local key = req:stash('key')
@@ -97,17 +101,17 @@ local function update_value(req)
     local body = req:json()
     return body['value']
   end)
+
+  if value == nil or not status then
+    return get_response(req, HTTP_CODE.BAD_REQUEST, "Invalid JSON body")
+  end
+
   local row = box.space.kv_store:select{ key }
   if row[1] == nil then
       return get_response(req, HTTP_CODE.NOT_FOUND, "Key doesn't exist")
   end
   local rowKey = row[1][1]
-
   local row = box.space.kv_store:update({rowKey}, {{'=', 2, value}})
-
-  if not status then
-    return get_response(req, HTTP_CODE.BAD_REQUEST, "Invalid JSON body")
-  end
 
   return get_response(req, HTTP_CODE.SUCCESS, "Success!")
   end
